@@ -88,9 +88,9 @@ class TestRemovedColumns:
         assert result == ["TR.Volume"]
 
     def test_detects_multiple_removed_columns(self, df_a):
-        df_sub = df_a.drop(columns=["TR.Volume", "TR.PriceHigh"])
+        df_sub = df_a.drop(columns=["TR.Volume", "BID"])
         result = removed_columns(df_a, df_sub)
-        assert set(result) == {"TR.Volume", "TR.PriceHigh"}
+        assert set(result) == {"TR.Volume", "BID"}
 
     def test_no_false_positives_for_additions(self, df_a):
         """Columns only in df_b should NOT appear in removed."""
@@ -157,16 +157,16 @@ class TestNullRateDelta:
             assert info["delta"] == 0.0
             assert not info["flagged"]
 
-    def test_volume_null_increase_flagged(self, df_a, df_b):
-        """Clean df_a has 0 % nulls in TR.Volume; dirty df_b has ~15 % — should be flagged."""
+    def test_bid_null_increase_flagged(self, df_a, df_b):
+        """Clean df_a has 0 % BID nulls; dirty df_b has ~15 % — should be flagged."""
         result = null_rate_delta(df_a, df_b)
-        assert result["TR.Volume"]["flagged"]
-        assert result["TR.Volume"]["delta"] > 0
+        assert result["BID"]["flagged"]
+        assert result["BID"]["delta"] > 0
 
     def test_custom_threshold_changes_flagging(self, df_a, df_b):
-        """With a very high threshold, the volume delta should NOT be flagged."""
+        """With a very high threshold, the BID delta should NOT be flagged."""
         result = null_rate_delta(df_a, df_b, flag_threshold=0.99)
-        assert not result["TR.Volume"]["flagged"]
+        assert not result["BID"]["flagged"]
 
     def test_values_are_rounded(self, df_a, df_b):
         result = null_rate_delta(df_a, df_b)
@@ -236,10 +236,11 @@ class TestRunAll:
         """Custom null_flag_threshold should propagate into null_rate_delta."""
         result_low = run_all(df_a, df_b, null_flag_threshold=0.01)
         result_high = run_all(df_a, df_b, null_flag_threshold=0.99)
-        # With low threshold, volume should be flagged; with high, not.
-        assert result_low["null_rate_delta"]["TR.Volume"]["flagged"]
-        assert not result_high["null_rate_delta"]["TR.Volume"]["flagged"]
+        # With low threshold, BID should be flagged (dirty has ~15 % nulls); with high, not.
+        assert result_low["null_rate_delta"]["BID"]["flagged"]
+        assert not result_high["null_rate_delta"]["BID"]["flagged"]
 
-    def test_dirty_vs_clean_shows_volume_delta(self, df_a, df_b):
+    def test_dirty_vs_clean_shows_bid_null_delta(self, df_a, df_b):
+        """BID null rate increases from 0 % (clean) to ~15 % (dirty)."""
         result = run_all(df_a, df_b)
-        assert result["null_rate_delta"]["TR.Volume"]["delta"] > 0
+        assert result["null_rate_delta"]["BID"]["delta"] > 0

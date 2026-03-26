@@ -30,6 +30,9 @@ dev = [
     "ruff>=0.0.285",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["lseg_validator"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"

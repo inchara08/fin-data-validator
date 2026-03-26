@@ -2,10 +2,15 @@
 tests/test_completeness.py — tests for lseg_validator.checks.completeness.
 
 All tests run against the dirty fixture (which has known injected issues):
-- ~15 % nulls in TR.Volume
-- 3 outlier prices in TR.PriceClose (stored as object after type mismatch injection)
-- 2 type mismatches (TR.PriceClose rows 5/6 set to string)
+- ~15 % nulls in BID and ASK (liquidity / after-hours gaps)
+- 2 price spike outliers in TRDPRC_1 (flash crash / bad tick)
+- 3 ACVOL_UNS rows stored as comma-formatted strings
+- 2 malformed Date values ('N/A', empty string)
+- 2 invalid RIC codes (missing exchange suffix)
 - 1 duplicate row
+
+TR.EPS is intentionally sparse in both clean and dirty data (populated only on
+earnings announcement dates, ~4 times per year per instrument).
 """
 
 from __future__ import annotations
@@ -62,19 +67,23 @@ class TestNullRatePerColumn:
         for col, rate in rates.items():
             assert 0.0 <= rate <= 1.0, f"Rate out of range for {col}: {rate}"
 
-    def test_volume_null_rate_around_15_percent(self, dirty_df):
-        """TR.Volume should have ~15 % nulls injected."""
+    def test_bid_null_rate_around_15_percent(self, dirty_df):
+        """BID should have ~15 % nulls injected (liquidity gap simulation)."""
         rates = null_rate_per_column(dirty_df)
-        volume_rate = rates["TR.Volume"]
-        # Accept 10–20 % to account for rounding with N=100
+        bid_rate = rates["BID"]
+        # Accept 10–20 % to account for rounding with N~250
         assert (
-            0.10 <= volume_rate <= 0.20
-        ), f"Expected TR.Volume null rate ~15%, got {volume_rate:.1%}"
+            0.10 <= bid_rate <= 0.20
+        ), f"Expected BID null rate ~15%, got {bid_rate:.1%}"
 
-    def test_clean_df_has_zero_nulls(self, clean_df):
+    def test_clean_df_has_zero_nulls_except_eps(self, clean_df):
+        """All columns should have zero nulls except TR.EPS, which is naturally
+        sparse (populated only on quarterly earnings announcement dates)."""
         rates = null_rate_per_column(clean_df)
         for col, rate in rates.items():
-            assert rate == 0.0, f"Clean df has nulls in {col}: {rate}"
+            if col == "TR.EPS":
+                continue  # TR.EPS is intentionally sparse in realistic LSEG data
+            assert rate == 0.0, f"Clean df has unexpected nulls in {col}: {rate:.1%}"
 
     def test_ric_column_no_nulls(self, dirty_df):
         rates = null_rate_per_column(dirty_df)
@@ -96,13 +105,13 @@ class TestNullRatePerColumn:
 
 class TestNullRateOverTime:
     def test_returns_dict_keyed_by_columns(self, dirty_df):
-        result = null_rate_over_time(dirty_df, "Timestamp")
+        result = null_rate_over_time(dirty_df, "Date")
         assert isinstance(result, dict)
-        # Timestamp column itself should not appear as a data column
-        assert "Timestamp" not in result
+        # Date column itself should not appear as a data column
+        assert "Date" not in result
 
     def test_each_value_is_list_of_dicts(self, dirty_df):
-        result = null_rate_over_time(dirty_df, "Timestamp")
+        result = null_rate_over_time(dirty_df, "Date")
         for col, entries in result.items():
             assert isinstance(entries, list), f"Expected list for {col}"
             for entry in entries:
@@ -114,16 +123,19 @@ class TestNullRateOverTime:
         result = null_rate_over_time(dirty_df, "nonexistent_col")
         assert result == {}
 
-    def test_volume_has_nonzero_null_rate_in_some_period(self, dirty_df):
-        """At least one daily bucket should have nulls in TR.Volume."""
-        result = null_rate_over_time(dirty_df, "Timestamp")
-        assert "TR.Volume" in result
-        any_null = any(e["null_rate"] > 0 for e in result["TR.Volume"])
-        assert any_null, "Expected some null rates > 0 in TR.Volume over time"
+    def test_bid_has_nonzero_null_rate_in_some_period(self, dirty_df):
+        """At least one daily bucket should have BID nulls in dirty data."""
+        result = null_rate_over_time(dirty_df, "Date")
+        assert "BID" in result
+        any_null = any(e["null_rate"] > 0 for e in result["BID"])
+        assert any_null, "Expected some null rates > 0 in BID over time"
 
-    def test_clean_df_all_null_rates_zero(self, clean_df):
-        result = null_rate_over_time(clean_df, "Timestamp")
+    def test_clean_df_all_null_rates_zero_except_eps(self, clean_df):
+        """TR.EPS is naturally sparse; all other columns should have zero nulls."""
+        result = null_rate_over_time(clean_df, "Date")
         for col, entries in result.items():
+            if col == "TR.EPS":
+                continue
             for entry in entries:
                 assert (
                     entry["null_rate"] == 0.0
@@ -154,11 +166,11 @@ class TestFlagNullSeverity:
         assert sev2["at_25"] == "medium"
         assert sev2["just_above_25"] == "high"
 
-    def test_volume_flagged_medium_or_high_on_dirty(self, dirty_df):
-        """TR.Volume with ~15 % nulls should be flagged medium."""
+    def test_bid_flagged_medium_or_high_on_dirty(self, dirty_df):
+        """BID with ~15 % injected nulls should be flagged medium or high."""
         rates = null_rate_per_column(dirty_df)
         sev = flag_null_severity(rates)
-        assert sev["TR.Volume"] in {"medium", "high"}
+        assert sev["BID"] in {"medium", "high"}
 
     def test_empty_input_returns_empty(self):
         assert flag_null_severity({}) == {}
@@ -178,10 +190,10 @@ class TestWithCSVFixture:
     def test_csv_fixture_loaded_and_checked(self, dirty_csv_df):
         rates = null_rate_per_column(dirty_csv_df)
         sev = flag_null_severity(rates)
-        assert "TR.Volume" in rates
-        assert sev["TR.Volume"] in {"medium", "high"}
+        assert "BID" in rates
+        assert sev["BID"] in {"medium", "high"}
 
     def test_csv_fixture_null_rate_over_time(self, dirty_csv_df):
-        result = null_rate_over_time(dirty_csv_df, "Timestamp")
+        result = null_rate_over_time(dirty_csv_df, "Date")
         assert isinstance(result, dict)
         assert len(result) > 0
