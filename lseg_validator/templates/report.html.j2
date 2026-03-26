@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LSEG Data Quality Report</title>
+  <style>
+    body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; color: #1a1a2e; }
+    h1 { color: #16213e; }
+    h2 { border-bottom: 2px solid #e94560; padding-bottom: .3rem; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+    th, td { border: 1px solid #ccc; padding: .5rem 1rem; text-align: left; }
+    th { background: #16213e; color: #eee; }
+    .low    { color: green; }
+    .medium { color: orange; }
+    .high   { color: red; font-weight: bold; }
+    .meta   { color: #555; font-size: .9rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>LSEG Data Quality Report</h1>
+  <p class="meta">Rows: {{ df_shape[0] }} &nbsp;|&nbsp; Columns: {{ df_shape[1] }}</p>
+
+  <h2>Completeness</h2>
+  <table>
+    <tr><th>Column</th><th>Null Rate</th><th>Severity</th></tr>
+    {% for col, rate in report.completeness.null_rate_per_column.items() %}
+    <tr>
+      <td>{{ col }}</td>
+      <td>{{ "%.1f"|format(rate * 100) }}%</td>
+      <td class="{{ report.completeness.null_severity.get(col, 'low') }}">
+        {{ report.completeness.null_severity.get(col, 'low') }}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Consistency</h2>
+  <table>
+    <tr><th>Check</th><th>Result</th></tr>
+    <tr><td>Numeric-string columns</td><td>{{ report.consistency.numeric_string_columns | join(", ") or "none" }}</td></tr>
+    <tr><td>Invalid RIC codes</td><td>{{ report.consistency.invalid_ric_count }}</td></tr>
+    <tr><td>Duplicate rows</td><td>{{ report.consistency.duplicate_row_count }}</td></tr>
+  </table>
+
+  <h2>Anomalies</h2>
+  <table>
+    <tr><th>Column</th><th>Z-score outliers</th><th>IQR outliers</th></tr>
+    {% set all_cols = (report.anomaly.zscore_outliers.keys() | list) + (report.anomaly.iqr_outliers.keys() | list) %}
+    {% for col in all_cols | unique %}
+    <tr>
+      <td>{{ col }}</td>
+      <td>{{ report.anomaly.zscore_outliers.get(col, []) | length }}</td>
+      <td>{{ report.anomaly.iqr_outliers.get(col, []) | length }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</body>
+</html>
