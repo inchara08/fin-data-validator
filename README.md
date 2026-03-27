@@ -7,6 +7,8 @@ A free, open-source data quality toolkit for financial market data. Point it at 
 Works great out of the box with **LSEG Data Library** outputs — TR.* fields, RIC codes, and OHLCV time series are all natively understood.
 
 ---
+<img width="1440" height="900" alt="image" src="https://github.com/user-attachments/assets/1267ac31-cb3d-4a54-862b-e6531fc64277" />
+
 
 ## Features
 
