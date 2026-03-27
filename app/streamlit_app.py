@@ -23,7 +23,7 @@ from fin_validator.checks.schema_diff import run_all as schema_diff
 
 st.set_page_config(page_title="Financial Data Validator", layout="wide")
 st.title("Financial Data Validator")
-st.caption("Drag-and-drop your CSV snapshot to run quality checks instantly. Tested with LSEG Data Library outputs.")
+st.caption("Drag-and-drop your CSV snapshot to run quality checks instantly.")
 
 
 SAMPLE_PATH = Path(__file__).parent.parent / "data" / "sample_financial_data.csv"
