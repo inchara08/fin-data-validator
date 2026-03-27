@@ -12,6 +12,7 @@ Run with::
 from __future__ import annotations
 
 import re as _re
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -25,12 +26,26 @@ st.title("Financial Data Validator")
 st.caption("Drag-and-drop your CSV snapshot to run quality checks instantly. Tested with LSEG Data Library outputs.")
 
 
+SAMPLE_PATH = Path(__file__).parent.parent / "data" / "sample_financial_data.csv"
+
+
 def _load(uploaded) -> pd.DataFrame:
     """Parse an uploaded file into a DataFrame."""
     if uploaded.name.endswith(".parquet"):
         return pd.read_parquet(uploaded)
     return pd.read_csv(uploaded)
 
+
+# ── Sample data button ────────────────────────────────────────────────────────
+btn_col, clear_col = st.columns([2, 1])
+with btn_col:
+    if st.button("▶ Try with sample data"):
+        st.session_state.use_sample = True
+with clear_col:
+    if st.session_state.get("use_sample"):
+        if st.button("✕ Clear sample"):
+            st.session_state.use_sample = False
+st.caption("250 rows · 10 instruments · OHLCV + TR.* fields")
 
 # ── File upload ──────────────────────────────────────────────────────────────
 col_a, col_b = st.columns(2)
@@ -41,17 +56,22 @@ with col_b:
         "Comparison snapshot (optional, for diff)", type=["csv", "parquet"]
     )
 
-if file_a is None:
-    st.info("Upload a CSV or Parquet file to begin.")
+if st.session_state.get("use_sample"):
+    df = pd.read_csv(SAMPLE_PATH)
+    sample_label = "sample_financial_data.csv"
+elif file_a is not None:
+    df = _load(file_a)
+    sample_label = file_a.name
+else:
+    st.info("Upload a CSV or Parquet file to begin, or try the sample data above.")
     st.stop()
 
-df = _load(file_a)
 df_b = _load(file_b) if file_b is not None else None
 
 report = DataQualityReport(df)
 results = report.to_dict()
 
-st.subheader(f"Dataset: `{file_a.name}` — {df.shape[0]:,} rows × {df.shape[1]} columns")
+st.subheader(f"Dataset: `{sample_label}` — {df.shape[0]:,} rows × {df.shape[1]} columns")
 
 # ── Field detection banner ────────────────────────────────────────────────────
 _ts_pattern = _re.compile(r"time|date|timestamp", _re.IGNORECASE)
