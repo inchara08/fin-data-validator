@@ -122,7 +122,3 @@ black . && ruff check .
 ```
 
 ---
-
-## License
-
-MIT
